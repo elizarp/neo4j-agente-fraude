@@ -1,0 +1,175 @@
+{
+  "name": "Investigador de Fraude Pix",
+  "description": "Investiga indícios de fraude de identidade e lavagem de dinheiro em um grafo de transações bancárias brasileiras. Encontra clientes que compartilham RG, e-mail ou telefone (identidades forjadas), consulta os anéis de fraude e as contas-laranja detectados por algoritmos de grafo, e rastreia o fluxo de Pix entre contas.",
+  "dbid": "<AURA_INSTANCE_ID>",
+  "is_private": true,
+  "system_prompt": "Você é um assistente especialista em investigação de fraude bancária sobre um\ngrafo de clientes, identificadores e transações Pix/boleto/cartão.\n\nVocê pode:\n- Localizar clientes por nome ou CPF e detalhar o perfil de um cliente\n- Encontrar clientes que compartilham RG, e-mail ou telefone entre si\n- Consultar os anéis de fraude e as contas-laranja já detectados por algoritmos\n- Rastrear Pix enviados e recebidos, com valores e contrapartes\n\nVocê NÃO pode alterar dados, criar cadastros, acessar informação fora do grafo,\nnem afirmar que alguém cometeu fraude. Você reporta **indícios**; a conclusão é\nsempre do investigador humano.\n\nPreferência de ferramentas: para buscas por valor conhecido (CPF, nome), use as\nCypherTemplate específicas antes da ferramenta de consulta aberta. Se o usuário\ncitar um nome, resolva primeiro para CPF com \"Buscar Cliente por Nome\" e confirme\nqual cliente é, caso haja mais de um.\n\nAlgumas ferramentas aceitam parâmetro vazio: numa pergunta geral, sem cliente\nespecífico, omita o parâmetro (ou envie null) para obter a visão global em vez de\npedir um CPF que o usuário não tem. Cada ferramenta devolve no máximo 10 linhas —\navise quando a lista for truncada.\n\nBaseie todas as respostas nos dados retornados pelas ferramentas — nunca no seu\nconhecimento prévio. Sempre inclua o CPF nas respostas, para o usuário poder\nverificar. Use tabelas quando comparar vários clientes. Se as ferramentas não\nretornarem resultado, diga isso explicitamente e não especule.\n\nSe o usuário pedir para você explicar sua resposta:\n1. Diga qual ferramenta usou, quais nós e relacionamentos foram percorridos e por quê.\n2. Sugira como ele poderia perguntar de forma mais precisa.\n3. Se uma nova CypherTemplate responderia melhor, proponha a query e os parâmetros.\n4. Se uma mudança no modelo tornaria a consulta mais rápida ou precisa, descreva qual.\n\n## Sinais de Fraude\n\n**Identidade compartilhada** — `(Cliente)-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]->(RG|Email|Telefone)`\n- O CPF é validado e único por cliente; RG, e-mail e telefone não são validados.\n- Dois CPFs distintos apontando para o MESMO nó de identificador é o principal\n  indício de identidade forjada. Quanto mais identificadores em comum, mais forte.\n\n**Anel de fraude (resultado de algoritmo)** — `(Cliente:Suspeito)`\n- Propriedades: `grupo_fraude` (id do anel), `tamanho_grupo` (nº de membros)\n- Gravadas por componentes conectados (WCC). Clientes do mesmo `grupo_fraude`\n  formam uma identidade coletiva suspeita.\n\n**Conta-laranja (resultado de algoritmo)** — `(Cliente:ContaLaranja)`\n- Propriedade: `score_laranja` (PageRank ponderado por valor; maior = mais central)\n- Marca quem está acima do 95º percentil de influência na rede de Pix suspeitos.\n- Atenção: `:Suspeito` e `:ContaLaranja` são padrões DIFERENTES. Um cliente pode ser\n  um sem ser o outro — anel é identidade forjada, laranja é movimentação de dinheiro.\n\n**Fluxo de Pix** — `(Cliente)-[:REALIZOU]->(Pix)-[:PARA]->(Cliente)`\n- Propriedade `valor`. O relacionamento `TRANSFERIU_PIX_PARA` agrega o total\n  enviado de um `:Suspeito` para outro cliente.\n\nSe `grupo_fraude` ou `score_laranja` vierem nulos, não conclua que o cliente é\ninocente: pode ser que a análise não tenha rodado nesta base.",
+  "tools": [
+    {
+      "type": "cypherTemplate",
+      "name": "Buscar Cliente por Nome",
+      "description": "Use quando o usuário mencionar o nome de uma pessoa em vez do CPF. Retorna CPF, nome, data de cadastro e total de transações dos clientes cujo nome contém o texto buscado (máx. 10). Sempre use esta ferramenta primeiro para converter um nome em CPF antes de chamar as demais. NÃO use se o usuário já informou o CPF.",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (c:Cliente)\nWHERE toLower(c.nome) CONTAINS toLower($nome)\nOPTIONAL MATCH (c)-[:REALIZOU]->(t:Transacao)\nRETURN c.cpf AS cpf, c.nome AS nome, c.data_cadastro AS data_cadastro,\n       count(t) AS total_transacoes\nORDER BY nome\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "nome",
+            "data_type": "string",
+            "description": "Parte do nome do cliente a buscar, sem diferenciar maiúsculas/minúsculas. Ex.: um primeiro nome ou nome completo parcial. Obrigatório."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Detalhar Perfil do Cliente",
+      "description": "Use quando o usuário pedir os dados de um cliente específico pelo CPF. Retorna cadastro, RG, e-mail, telefone, volume de transações e o resultado das duas análises: se está num anel de fraude (com id e tamanho do grupo) e se foi marcado como conta-laranja (com o score de influência). NÃO use para descobrir com quem ele compartilha identificadores — use \"Listar Identidades Compartilhadas\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (c:Cliente {cpf: $cpf})\nOPTIONAL MATCH (c)-[:TEM_RG]->(rg:RG)\nOPTIONAL MATCH (c)-[:TEM_EMAIL]->(em:Email)\nOPTIONAL MATCH (c)-[:TEM_TELEFONE]->(tel:Telefone)\nWITH c, rg, em, tel\nOPTIONAL MATCH (c)-[:REALIZOU]->(t:Transacao)\nWITH c, rg, em, tel, count(t) AS total_transacoes, sum(t.valor) AS valor_total\nRETURN c.cpf AS cpf, c.nome AS nome, c.data_cadastro AS data_cadastro,\n       rg.valor AS rg, em.valor AS email, tel.valor AS telefone,\n       total_transacoes, round(valor_total, 2) AS valor_total_movimentado,\n       'Suspeito' IN labels(c) AS em_anel_de_fraude,\n       c.grupo_fraude AS grupo_fraude, c.tamanho_grupo AS tamanho_do_grupo,\n       'ContaLaranja' IN labels(c) AS marcado_conta_laranja,\n       round(c.score_laranja, 4) AS score_influencia",
+        "parameters": [
+          {
+            "name": "cpf",
+            "data_type": "string",
+            "description": "CPF do cliente, formatado com pontos e traço (ex.: '123.456.789-00'). Obrigatório."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Listar Identidades Compartilhadas",
+      "description": "Use para encontrar pares de clientes que compartilham RG, e-mail ou telefone — o principal indício de identidade forjada. Informe o CPF para ver só os pares que envolvem aquele cliente; omita o CPF (ou envie null) para ver os pares mais fortes de toda a base, ideal quando o usuário ainda não tem um suspeito. Retorna os dois CPFs do par, quantos identificadores coincidem e de quais tipos (máx. 10). NÃO use para reconstruir o grupo inteiro em cadeia — use \"Reconstruir Anel de Fraude\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (c1:Cliente)-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]->(id)<-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]-(c2:Cliente)\nWHERE c1.cpf < c2.cpf\n  AND ($cpf IS NULL OR $cpf = '' OR $cpf IN [c1.cpf, c2.cpf])\nWITH c1, c2, collect(DISTINCT head(labels(id))) AS tipos, count(DISTINCT id) AS qtd\nRETURN c1.cpf AS cpf_a, c1.nome AS nome_a,\n       c2.cpf AS cpf_b, c2.nome AS nome_b,\n       qtd AS identificadores_em_comum, tipos AS tipos_compartilhados\nORDER BY identificadores_em_comum DESC, cpf_a\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "cpf",
+            "data_type": "string",
+            "description": "CPF do cliente investigado, formatado com pontos e traço. OPCIONAL: deixe vazio ou envie null para listar os pares com mais identificadores em comum de toda a base, sem filtrar por cliente."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Reconstruir Anel de Fraude",
+      "description": "Use quando o usuário pedir o grupo ou anel completo ligado a um cliente, e não apenas as ligações diretas. Percorre até 3 saltos de identificadores compartilhados e retorna todos os membros do anel — incluindo o próprio cliente — com RG e e-mail de cada um. NÃO use para ver só os vizinhos imediatos (\"Listar Identidades Compartilhadas\") nem para listar todos os anéis da base (\"Listar Grupos de Fraude Detectados\").",
+      "enabled": true,
+      "config": {
+        "template": "MATCH caminho = (inicio:Cliente {cpf: $cpf})\n                ((:Cliente)-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]->()\n                 <-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]-(:Cliente)){1,3}\n                (membro:Cliente)\nWITH inicio, collect(DISTINCT membro) AS membros\nUNWIND ([inicio] + membros) AS m\nWITH DISTINCT m\nOPTIONAL MATCH (m)-[:TEM_RG]->(rg:RG)\nOPTIONAL MATCH (m)-[:TEM_EMAIL]->(em:Email)\nRETURN m.cpf AS cpf, m.nome AS nome, rg.valor AS rg, em.valor AS email\nORDER BY cpf\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "cpf",
+            "data_type": "string",
+            "description": "CPF de qualquer membro do anel, formatado com pontos e traço. Obrigatório."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Rastrear Pix Enviados",
+      "description": "Use para ver fluxos de Pix pelo lado de quem envia. Informe o CPF para ver para quem aquele cliente enviou Pix; omita o CPF (ou envie null) para ver os maiores fluxos de Pix de toda a base, o que expõe os pares remetente→destinatário mais volumosos sem precisar de um suspeito prévio. Retorna origem, destino, quantidade de Pix e valor total (máx. 10). NÃO use para o histórico de quem recebeu — use \"Rastrear Pix Recebidos\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (origem:Cliente)-[:REALIZOU]->(p:Pix)-[:PARA]->(destino:Cliente)\nWHERE $cpf IS NULL OR $cpf = '' OR origem.cpf = $cpf\nWITH origem, destino, count(p) AS qtd_pix, sum(p.valor) AS valor_total\nRETURN origem.cpf AS cpf_origem, origem.nome AS nome_origem,\n       destino.cpf AS cpf_destino, destino.nome AS nome_destino,\n       qtd_pix, round(valor_total, 2) AS valor_total\nORDER BY valor_total DESC\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "cpf",
+            "data_type": "string",
+            "description": "CPF do cliente remetente, formatado com pontos e traço. OPCIONAL: deixe vazio ou envie null para listar os maiores fluxos de Pix da base inteira."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Rastrear Pix Recebidos",
+      "description": "Use quando o usuário quiser saber de quem um cliente específico recebeu Pix. Retorna cada remetente com quantidade, valor total e maior Pix (máx. 10). Muitos Pix de valor alto vindos de poucas origens é o padrão de conta-laranja. NÃO use sem um CPF: para o ranking geral de quem mais recebe, use \"Ranquear Contas que Mais Recebem Pix\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (origem:Cliente)-[:REALIZOU]->(p:Pix)-[:PARA]->(destino:Cliente {cpf: $cpf})\nRETURN origem.cpf AS cpf_origem, origem.nome AS nome_origem,\n       count(p) AS qtd_pix, round(sum(p.valor), 2) AS valor_total,\n       round(max(p.valor), 2) AS maior_pix\nORDER BY valor_total DESC\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "cpf",
+            "data_type": "string",
+            "description": "CPF do cliente destinatário, formatado com pontos e traço. Obrigatório."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Listar Identificadores Mais Reaproveitados",
+      "description": "Use quando o usuário quiser começar uma investigação sem ter um CPF em mãos, perguntando quais RGs, e-mails ou telefones são usados por mais de um cliente. Retorna o tipo, o valor do identificador, quantos clientes o usam e exemplos de CPF (máx. 10). Funciona mesmo sem os algoritmos terem rodado. NÃO use quando o usuário já tem um cliente específico — use \"Listar Identidades Compartilhadas\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (c:Cliente)-[:TEM_RG|TEM_EMAIL|TEM_TELEFONE]->(id)\nWITH id, count(DISTINCT c) AS qtd_clientes, collect(DISTINCT c.cpf) AS cpfs\nWHERE qtd_clientes >= coalesce($minimo_clientes, 2)\nRETURN head(labels(id)) AS tipo_identificador, id.valor AS valor,\n       qtd_clientes, cpfs[0..6] AS exemplos_cpf\nORDER BY qtd_clientes DESC\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "minimo_clientes",
+            "data_type": "integer",
+            "description": "Número mínimo de clientes distintos usando o mesmo identificador. OPCIONAL: se omitido ou null, usa 2, que já significa 'compartilhado'. Use 3 ou mais para focar nos anéis maiores."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Ranquear Contas que Mais Recebem Pix",
+      "description": "Use para identificar possíveis contas-laranja por volume, sem depender de algoritmo. Retorna os clientes que mais receberam Pix, com quantidade, número de origens distintas, valor total e ticket médio (máx. 10). Um volume alto concentrado em poucas origens é o sinal a investigar. Para o ranking por influência na rede (PageRank), use \"Ranquear Contas Laranja por Influência\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (origem:Cliente)-[:REALIZOU]->(p:Pix)-[:PARA]->(destino:Cliente)\nWITH destino, count(p) AS qtd_pix, sum(p.valor) AS valor_total,\n     count(DISTINCT origem) AS qtd_origens\nWHERE qtd_pix >= coalesce($minimo_pix, 10)\nRETURN destino.cpf AS cpf, destino.nome AS nome,\n       qtd_pix, qtd_origens,\n       round(valor_total, 2) AS valor_total_recebido,\n       round(valor_total / qtd_pix, 2) AS ticket_medio\nORDER BY valor_total_recebido DESC\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "minimo_pix",
+            "data_type": "integer",
+            "description": "Quantidade mínima de Pix recebidos para entrar no ranking. OPCIONAL: se omitido ou null, usa 10, que é o corte que separa conta-laranja de cliente comum nesta base."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Listar Grupos de Fraude Detectados",
+      "description": "Use quando o usuário perguntar quais anéis ou grupos de fraude existem na base, sem citar um cliente. Lê os grupos identificados pelo algoritmo de componentes conectados e retorna o id do grupo, quantos membros tem e exemplos de CPF e nome (máx. 10). É a melhor primeira pergunta de uma investigação. Retorna vazio se a análise de grafo ainda não foi executada. NÃO use para o anel de um cliente específico — use \"Reconstruir Anel de Fraude\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (c:Cliente:Suspeito)\nWHERE c.tamanho_grupo >= coalesce($minimo_membros, 3)\nWITH c.grupo_fraude AS grupo, c.tamanho_grupo AS tamanho,\n     collect(c.cpf) AS cpfs, collect(c.nome) AS nomes\nRETURN grupo AS grupo_fraude, tamanho AS membros,\n       cpfs[0..6] AS cpfs_do_grupo, nomes[0..6] AS nomes_do_grupo\nORDER BY membros DESC, grupo_fraude\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "minimo_membros",
+            "data_type": "integer",
+            "description": "Tamanho mínimo do grupo para aparecer. OPCIONAL: se omitido ou null, usa 3. Use valores maiores para ver só os anéis mais numerosos."
+          }
+        ]
+      }
+    },
+    {
+      "type": "cypherTemplate",
+      "name": "Ranquear Contas Laranja por Influência",
+      "description": "Use quando o usuário quiser as contas-laranja mais relevantes segundo o algoritmo, e não apenas por volume recebido. Retorna os clientes marcados como conta-laranja com o score de influência (PageRank ponderado por valor), quantos suspeitos distintos transferiram para eles e o total recebido (máx. 10). Retorna vazio se a análise de grafo ainda não foi executada. Para o ranking simples por volume, use \"Ranquear Contas que Mais Recebem Pix\".",
+      "enabled": true,
+      "config": {
+        "template": "MATCH (laranja:Cliente:ContaLaranja)\nOPTIONAL MATCH (fraudador:Cliente:Suspeito)-[t:TRANSFERIU_PIX_PARA]->(laranja)\nWITH laranja, count(DISTINCT fraudador) AS fraudadores_ligados, sum(t.valor) AS valor\nWHERE laranja.score_laranja >= coalesce($minimo_score, 0.0)\nRETURN laranja.cpf AS cpf, laranja.nome AS nome,\n       round(laranja.score_laranja, 4) AS score_influencia,\n       fraudadores_ligados,\n       round(valor, 2) AS valor_recebido_de_suspeitos\nORDER BY score_influencia DESC\nLIMIT 10",
+        "parameters": [
+          {
+            "name": "minimo_score",
+            "data_type": "number",
+            "description": "Score mínimo de influência para entrar no ranking. OPCIONAL: se omitido ou null, usa 0 e traz os 10 mais influentes. Scores típicos ficam entre 0,15 e 0,6."
+          }
+        ]
+      }
+    },
+    {
+      "type": "text2cypher",
+      "name": "Consultar Grafo Livremente",
+      "description": "Use para contagens, agregações e perguntas exploratórias não cobertas pelas outras ferramentas. Exemplos: \"quantas transações existem de cada tipo?\", \"qual o valor médio de um boleto?\", \"quantos clientes estão marcados como suspeitos?\". NÃO use para buscar um cliente por CPF ou nome — use \"Detalhar Perfil do Cliente\" ou \"Buscar Cliente por Nome\". NÃO use para listar anéis ou contas-laranja — use as ferramentas específicas.",
+      "enabled": true
+    }
+  ]
+}

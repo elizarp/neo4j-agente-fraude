@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------
+# Credenciais — nunca comitar
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+aura-credentials*.txt
+
+# ---------------------------------------------------------------
+# Dados gerados pelo notebook 01
+# São sintéticos e reproduzíveis (SEED fixo), então não precisam
+# ir para o repositório — cada pessoa gera os seus rodando o 01.
+# ---------------------------------------------------------------
+data/
+*.csv
+
+# ---------------------------------------------------------------
+# Jupyter / notebooks
+# ---------------------------------------------------------------
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+*-checkpoint.ipynb
+
+# ---------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------
+# Editores / IDEs
+# ---------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---------------------------------------------------------------
+# Sistema operacional
+# ---------------------------------------------------------------
+.DS_Store
+.DS_Store?
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------
+# Configuração local do Claude Code (pessoal, não do projeto)
+# ---------------------------------------------------------------
+.claude/settings.local.json
