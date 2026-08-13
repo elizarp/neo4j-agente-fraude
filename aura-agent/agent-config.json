@@ -136,7 +136,7 @@
     {
       "type": "cypherTemplate",
       "name": "Listar Grupos de Fraude Detectados",
-      "description": "Use quando o usuário perguntar quais anéis ou grupos de fraude existem na base, sem citar um cliente. Lê os grupos identificados pelo algoritmo de componentes conectados e retorna o id do grupo, quantos membros tem e exemplos de CPF e nome (máx. 10). É a melhor primeira pergunta de uma investigação. Retorna vazio se a análise de grafo ainda não foi executada. NÃO use para o anel de um cliente específico — use \"Reconstruir Anel de Fraude\".",
+      "description": "Use quando o usuário perguntar quais anéis ou grupos de fraude existem na base, sem citar um cliente específico. Perguntas típicas: \"quais grupos de fraude existem na base?\", \"quantos anéis foram detectados?\", \"me mostre os maiores grupos\", \"liste os anéis de fraude\". Lê os grupos identificados pelo algoritmo de componentes conectados e retorna o id do grupo, quantos membros tem e exemplos de CPF e nome (máx. 10). É a melhor primeira pergunta de uma investigação. Retorna vazio se a análise de grafo ainda não foi executada. NÃO use para o anel de um cliente específico — use \"Reconstruir Anel de Fraude\".",
       "enabled": true,
       "config": {
         "template": "MATCH (c:Cliente:Suspeito)\nWHERE c.tamanho_grupo >= coalesce($minimo_membros, 3)\nWITH c.grupo_fraude AS grupo, c.tamanho_grupo AS tamanho,\n     collect(c.cpf) AS cpfs, collect(c.nome) AS nomes\nRETURN grupo AS grupo_fraude, tamanho AS membros,\n       cpfs[0..6] AS cpfs_do_grupo, nomes[0..6] AS nomes_do_grupo\nORDER BY membros DESC, grupo_fraude\nLIMIT 10",
@@ -152,7 +152,7 @@
     {
       "type": "cypherTemplate",
       "name": "Ranquear Contas Laranja por Influência",
-      "description": "Use quando o usuário quiser as contas-laranja mais relevantes segundo o algoritmo, e não apenas por volume recebido. Retorna os clientes marcados como conta-laranja com o score de influência (PageRank ponderado por valor), quantos suspeitos distintos transferiram para eles e o total recebido (máx. 10). Retorna vazio se a análise de grafo ainda não foi executada. Para o ranking simples por volume, use \"Ranquear Contas que Mais Recebem Pix\".",
+      "description": "Use quando o usuário quiser as contas-laranja mais relevantes segundo o algoritmo, e não apenas por volume recebido. Perguntas típicas: \"quem são as contas-laranja mais influentes?\", \"ranqueie as contas-laranja\", \"quais laranjas têm o maior score?\". Retorna os clientes marcados como conta-laranja com o score de influência (PageRank ponderado por valor), quantos suspeitos distintos transferiram para eles e o total recebido (máx. 10). Retorna vazio se a análise de grafo ainda não foi executada. Para o ranking simples por volume, use \"Ranquear Contas que Mais Recebem Pix\".",
       "enabled": true,
       "config": {
         "template": "MATCH (laranja:Cliente:ContaLaranja)\nOPTIONAL MATCH (fraudador:Cliente:Suspeito)-[t:TRANSFERIU_PIX_PARA]->(laranja)\nWITH laranja, count(DISTINCT fraudador) AS fraudadores_ligados, sum(t.valor) AS valor\nWHERE laranja.score_laranja >= coalesce($minimo_score, 0.0)\nRETURN laranja.cpf AS cpf, laranja.nome AS nome,\n       round(laranja.score_laranja, 4) AS score_influencia,\n       fraudadores_ligados,\n       round(valor, 2) AS valor_recebido_de_suspeitos\nORDER BY score_influencia DESC\nLIMIT 10",

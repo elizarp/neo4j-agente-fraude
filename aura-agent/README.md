@@ -376,7 +376,7 @@ Lê o resultado do algoritmo de componentes conectados gravado no grafo.
 |---|---|
 | **Type** | `cypherTemplate` |
 | **Name** | `Listar Grupos de Fraude Detectados` |
-| **Description** | Use quando o usuário perguntar quais anéis ou grupos de fraude existem na base, sem citar um cliente. Lê os grupos identificados pelo algoritmo de componentes conectados e retorna o id do grupo, quantos membros tem e exemplos de CPF e nome (máx. 10). É a melhor primeira pergunta de uma investigação. Retorna vazio se a análise de grafo ainda não foi executada. NÃO use para o anel de um cliente específico — use "Reconstruir Anel de Fraude". |
+| **Description** | Use quando o usuário perguntar quais anéis ou grupos de fraude existem na base, sem citar um cliente específico. Perguntas típicas: "quais grupos de fraude existem na base?", "quantos anéis foram detectados?", "me mostre os maiores grupos", "liste os anéis de fraude". Lê os grupos identificados pelo algoritmo de componentes conectados e retorna o id do grupo, quantos membros tem e exemplos de CPF e nome (máx. 10). É a melhor primeira pergunta de uma investigação. Retorna vazio se a análise de grafo ainda não foi executada. NÃO use para o anel de um cliente específico — use "Reconstruir Anel de Fraude". |
 
 **Parameters**
 
@@ -407,7 +407,7 @@ Lê o resultado do PageRank gravado no grafo.
 |---|---|
 | **Type** | `cypherTemplate` |
 | **Name** | `Ranquear Contas Laranja por Influência` |
-| **Description** | Use quando o usuário quiser as contas-laranja mais relevantes segundo o algoritmo, e não apenas por volume recebido. Retorna os clientes marcados como conta-laranja com o score de influência (PageRank ponderado por valor), quantos suspeitos distintos transferiram para eles e o total recebido (máx. 10). Retorna vazio se a análise de grafo ainda não foi executada. Para o ranking simples por volume, use "Ranquear Contas que Mais Recebem Pix". |
+| **Description** | Use quando o usuário quiser as contas-laranja mais relevantes segundo o algoritmo, e não apenas por volume recebido. Perguntas típicas: "quem são as contas-laranja mais influentes?", "ranqueie as contas-laranja", "quais laranjas têm o maior score?". Retorna os clientes marcados como conta-laranja com o score de influência (PageRank ponderado por valor), quantos suspeitos distintos transferiram para eles e o total recebido (máx. 10). Retorna vazio se a análise de grafo ainda não foi executada. Para o ranking simples por volume, use "Ranquear Contas que Mais Recebem Pix". |
 
 **Parameters**
 
@@ -444,31 +444,67 @@ Sem parâmetros: o agente gera o Cypher a partir do schema.
 
 ---
 
-## Perguntas para testar o agente
+## Testando o agente
+
+### Passo 0 — confirme que as 11 tools foram criadas
+
+**Faça isso antes de qualquer pergunta.** O sintoma de uma tool faltando é o agente
+responder *"não tenho uma ferramenta específica para isso"* — o que parece um
+problema de entendimento, mas é só configuração incompleta.
+
+No Aura Console, abra o agente e conte as ferramentas. Devem ser **11**:
+
+| # | Tool | Depende do notebook 04? |
+|---|---|---|
+| 1 | Buscar Cliente por Nome | não |
+| 2 | Detalhar Perfil do Cliente | não (mas alguns campos ficam nulos) |
+| 3 | Listar Identidades Compartilhadas | não |
+| 4 | Reconstruir Anel de Fraude | não |
+| 5 | Rastrear Pix Enviados | não |
+| 6 | Rastrear Pix Recebidos | não |
+| 7 | Listar Identificadores Mais Reaproveitados | não |
+| 8 | Ranquear Contas que Mais Recebem Pix | não |
+| 9 | Listar Grupos de Fraude Detectados | **sim** |
+| 10 | Ranquear Contas Laranja por Influência | **sim** |
+| 11 | Consultar Grafo Livremente | não |
+
+Se faltar alguma, adicione pelo Console (as tabelas acima têm tudo) ou recrie o
+agente a partir do `agent-config.json` atualizado.
+
+### Passo 1 — roteiro de perguntas
 
 Os dados são gerados aleatoriamente a cada execução do notebook 01, então os nomes
-e CPFs da **sua** base serão diferentes. Substitua os marcadores por valores reais
-— use as perguntas 1 e 2 para descobri-los.
+e CPFs da **sua** base serão diferentes. Use as perguntas 1 e 2 para descobri-los e
+substituir os marcadores.
 
-| # | Pergunta | Exercita |
+| # | Pergunta | Tool esperada | Resposta correta contém |
+|---|---|---|---|
+| 1 | *"Quais grupos de fraude existem na base?"* | 9 | ids de grupo e nº de membros (ex.: 25 grupos, os maiores com 6) |
+| 2 | *"Quem são as contas-laranja mais influentes?"* | 10 | CPFs com `score_influencia` decrescente |
+| 3 | *"Quais RGs ou e-mails são usados por 3 ou mais clientes?"* | 7 | tipo, valor do identificador e nº de clientes |
+| 4 | *"Existem clientes compartilhando documentos entre si?"* | 3 **sem CPF** | pares de CPF com nº de identificadores em comum |
+| 5 | *"Me mostre o anel de fraude do CPF `<CPF DE UM MEMBRO>`"* | 4 | todos os membros do anel, incluindo o CPF informado |
+| 6 | *"Quem compartilha identificador com `<NOME>`?"* | 1, depois 3 | o agente resolve nome→CPF antes de investigar |
+| 7 | *"Quais são os maiores fluxos de Pix da base?"* | 5 **sem CPF** | pares origem→destino com valor total |
+| 8 | *"O cliente `<CPF>` está em algum anel? É conta-laranja?"* | 2 | os dois veredictos, que podem divergir |
+| 9 | *"Quantas transações existem de cada tipo?"* | 11 | Pix ~35%, Compra ~30%, etc. |
+| 10 | *"Explique como você chegou nessa resposta"* | — | qual tool usou e quais nós percorreu |
+
+### Passo 2 — o que fazer quando falha
+
+| Sintoma | Causa provável | Correção |
 |---|---|---|
-| 1 | *"Quais grupos de fraude existem na base?"* | tool 9 (resultado do WCC) |
-| 2 | *"Quem são as contas-laranja mais influentes?"* | tool 10 (resultado do PageRank) |
-| 3 | *"Quais e-mails ou RGs estão sendo usados por 3 ou mais clientes?"* | tool 7 |
-| 4 | *"Existem clientes compartilhando documentos entre si?"* | tool 3 **sem CPF** |
-| 5 | *"Me mostre o anel de fraude do CPF `<CPF DE UM MEMBRO DE ANEL>`"* | tool 4 |
-| 6 | *"Quem compartilha identificador com `<NOME DE UM CLIENTE>`?"* | tool 1, depois tool 3 |
-| 7 | *"Quais são os maiores fluxos de Pix da base?"* | tool 5 **sem CPF** |
-| 8 | *"De quem `<NOME DE UMA CONTA-LARANJA>` recebeu Pix?"* | tool 1, depois tool 6 |
-| 9 | *"O cliente `<CPF>` está em algum anel? É conta-laranja?"* | tool 2 |
-| 10 | *"Quantas transações existem de cada tipo?"* | tool 11 (fallback) |
-| 11 | *"Explique como você chegou nessa resposta"* | modo de explicação |
+| *"não tenho uma ferramenta específica para isso"* | a tool não foi criada no agente | conte as tools (Passo 0) e adicione a que falta |
+| Tool 9 ou 10 responde vazio | notebook 04 não rodou nesta instância | rode o notebook 04 e pergunte de novo |
+| O agente pede um CPF numa pergunta geral | ele não percebeu que o parâmetro é opcional | confirme que a descrição do parâmetro contém "OPCIONAL" |
+| O agente usa a consulta livre para tudo | a tool específica está desabilitada, ou o `text2cypher` não está por último | verifique a ordem e o `enabled` das tools |
+| Respostas certas mas suspeitas de precisão perfeita | pode estar lendo as propriedades de gabarito | peça *"explique como chegou nessa resposta"* e confirme qual tool foi usada |
 
-Três demonstrações que valem o palco:
+### Três demonstrações que valem o palco
 
 - **Perguntas 1 e 2** são a prova de que o notebook 04 fez diferença: elas só
   funcionam porque os algoritmos gravaram o resultado no grafo.
 - **Perguntas 4 e 6** são a *mesma ferramenta* respondendo à visão global e à
   investigação de um cliente, só pela presença ou ausência do CPF.
-- **Pergunta 9** mostra que os dois padrões são independentes: um cliente pode
+- **Pergunta 8** mostra que os dois padrões são independentes: um cliente pode
   estar num anel de identidades sem ser conta-laranja, e vice-versa.
