@@ -1,4 +1,4 @@
-# Carga de dados relacionais no Neo4j — Workshop SECOMP
+# Carga de dados relacionais no Neo4j — Workshop
 
 Material prático para aprender a modelar dados relacionais como um grafo e
 carregá-los no Neo4j, usando um cenário de **detecção de fraude bancária
