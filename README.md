@@ -27,8 +27,26 @@ workshop/
 ├── aura-agent/                             # (opcional) configuração de um Aura Agent
 │   ├── README.md                           # campos e tools sugeridas
 │   └── agent-config.json                   # payload pronto para a API
-└── data/                                   # CSVs gerados pelo notebook 01 (git-ignorável)
+└── data/                                   # CSVs gerados pelo notebook 01 (git-ignorado)
 ```
+
+### Onde os CSVs são gravados
+
+Os notebooks detectam sozinhos o ambiente:
+
+| Ambiente | Pasta dos CSVs |
+|---|---|
+| **Google Colab** | `MyDrive/workshop-neo4j-csv` no seu Google Drive |
+| **Local (Jupyter)** | `data/` ao lado dos notebooks |
+
+No Colab isso não é conveniência, é necessidade: o disco local do runtime é
+**apagado** quando a sessão é reciclada. Gravando no seu Drive, você gera os dados
+uma vez e pode voltar depois — inclusive rodar o notebook 02 num dia e o 04 no
+outro sem gerar tudo de novo. Na primeira célula, o Colab vai pedir autorização de
+acesso ao Drive.
+
+Se você estiver no Colab e quiser mudar a pasta, edite `PASTA_DADOS` na célula de
+ambiente — todos os notebooks usam essa variável.
 
 ## Pré-requisitos
 
@@ -90,7 +108,7 @@ desinstale o `neo4j`** — o acelerador é um binário que vive dentro dele. O n
 3. **`02_modelagem_e_carga.ipynb`** — o núcleo do material: mapeamento relacional → grafo, constraints, carga em lote
 4. **`03_cypher_basico.ipynb`** — aprenda a linguagem de consulta com o grafo que você acabou de montar (`MATCH`, travessias, agregação, caminhos de tamanho variável). Não fala de fraude: é só a linguagem
 5. **`04_explorando_fraude.ipynb`** — a investigação: anéis de fraude e contas-laranja, com Cypher e Graph Data Science (via Aura Graph Analytics). Grava os resultados de volta no grafo, o que habilita o agente no fim
-6. **`05_visualizacao.ipynb`** — veja os achados desenhados com [`neo4j-viz`](https://pypi.org/project/neo4j-viz/)
+6. **`05_visualizacao.ipynb`** — veja os achados desenhados com [`neo4j-viz`](https://pypi.org/project/neo4j-viz/) (a versão está fixada em `<1.7` de propósito: a 1.7 exige um `traitlets` mais novo do que o do Colab e falha no import com `TypeError: type 'Instance' is not subscriptable`)
 
 E o fecho do material: **[`aura-agent/`](aura-agent/README.md)** traz a configuração
 de um [Aura Agent](https://neo4j.com/docs/aura/agents/) sobre esse mesmo grafo — 10
