@@ -20,6 +20,12 @@ deste diretório.
 > Todas as queries foram **testadas** contra uma instância AuraDB Free com a base
 > padrão do material (10.000 clientes, 140.531 transações), tanto com parâmetro
 > preenchido quanto vazio.
+>
+> ⚠️ O grafo contém as propriedades `gabarito_anel` e `gabarito_laranja` (o gabarito
+> dos dados sintéticos, usado no notebook 04 para medir a precisão). Nenhuma tool
+> deste documento as lê, e o system prompt proíbe explicitamente que o agente as
+> use — sem isso, a ferramenta de consulta livre poderia responder "quem é
+> fraudador" lendo o gabarito, o que anularia a demonstração.
 
 ---
 
@@ -59,15 +65,13 @@ CypherTemplate específicas antes da ferramenta de consulta aberta. Se o usuári
 citar um nome, resolva primeiro para CPF com "Buscar Cliente por Nome" e confirme
 qual cliente é, caso haja mais de um.
 
-Algumas ferramentas aceitam parâmetro vazio: numa pergunta geral, sem cliente
-específico, omita o parâmetro (ou envie null) para obter a visão global em vez de
-pedir um CPF que o usuário não tem. Cada ferramenta devolve no máximo 10 linhas —
-avise quando a lista for truncada.
+Algumas ferramentas aceitam parâmetro vazio: numa pergunta geral, omita o parâmetro
+(ou envie null) para a visão global, em vez de pedir um CPF que o usuário não tem.
+Cada ferramenta devolve no máximo 10 linhas — avise quando truncar.
 
-Baseie todas as respostas nos dados retornados pelas ferramentas — nunca no seu
-conhecimento prévio. Sempre inclua o CPF nas respostas, para o usuário poder
-verificar. Use tabelas quando comparar vários clientes. Se as ferramentas não
-retornarem resultado, diga isso explicitamente e não especule.
+Baseie as respostas nos dados das ferramentas — nunca no seu conhecimento prévio.
+Sempre inclua o CPF, para o usuário poder verificar. Use tabelas ao comparar vários
+clientes. Se as ferramentas não retornarem nada, diga isso e não especule.
 
 Se o usuário pedir para você explicar sua resposta:
 1. Diga qual ferramenta usou, quais nós e relacionamentos foram percorridos e por quê.
@@ -99,6 +103,11 @@ Se o usuário pedir para você explicar sua resposta:
 
 Se `grupo_fraude` ou `score_laranja` vierem nulos, não conclua que o cliente é
 inocente: pode ser que a análise não tenha rodado nesta base.
+
+**PROIBIDO ler as propriedades `gabarito_anel` e `gabarito_laranja`.** São o
+gabarito de dados sintéticos: usá-las seria colar — daria a resposta certa sem
+investigar nada. Se perguntarem quem é fraudador "de verdade", responda com o que a
+investigação encontrou (`:Suspeito`, `:ContaLaranja`).
 ```
 
 ---
@@ -429,7 +438,7 @@ LIMIT 10
 |---|---|
 | **Type** | `text2cypher` |
 | **Name** | `Consultar Grafo Livremente` |
-| **Description** | Use para contagens, agregações e perguntas exploratórias não cobertas pelas outras ferramentas. Exemplos: "quantas transações existem de cada tipo?", "qual o valor médio de um boleto?", "quantos clientes estão marcados como suspeitos?". NÃO use para buscar um cliente por CPF ou nome — use "Detalhar Perfil do Cliente" ou "Buscar Cliente por Nome". NÃO use para listar anéis ou contas-laranja — use as ferramentas específicas. |
+| **Description** | Use para contagens, agregações e perguntas exploratórias não cobertas pelas outras ferramentas. Exemplos: "quantas transações existem de cada tipo?", "qual o valor médio de um boleto?", "quantos clientes estão marcados como suspeitos?". NUNCA gere Cypher que leia as propriedades `gabarito_anel` ou `gabarito_laranja`: elas são o gabarito dos dados sintéticos e usá-las é colar. NÃO use para buscar um cliente por CPF ou nome — use "Detalhar Perfil do Cliente" ou "Buscar Cliente por Nome". NÃO use para listar anéis ou contas-laranja — use as ferramentas específicas. |
 
 Sem parâmetros: o agente gera o Cypher a partir do schema.
 
